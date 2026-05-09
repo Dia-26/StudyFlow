@@ -1,0 +1,195 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  avatarUrl     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Gamification
+  xp            Int       @default(0)
+  level         Int       @default(1)
+  streak        Int       @default(0)
+  lastStudyDate DateTime?
+
+  notes            Note[]
+  decks            Deck[]
+  quizzes          Quiz[]
+  studySessions    StudySession[]
+  conversations    Conversation[]
+  goals            Goal[]
+  exams            Exam[]
+  achievements     UserAchievement[]
+  communityMembers CommunityMember[]
+}
+
+model Note {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  content     String   @db.Text
+  isPdf       Boolean  @default(false)
+  pdfUrl      String?
+  summary     String?  @db.Text
+  keywords    String[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Deck {
+  id          String      @id @default(cuid())
+  userId      String
+  title       String
+  description String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  flashcards  Flashcard[]
+}
+
+model Flashcard {
+  id             String   @id @default(cuid())
+  deckId         String
+  front          String   @db.Text
+  back           String   @db.Text
+  easeFactor     Float    @default(2.5)
+  interval       Int      @default(0)
+  repetitions    Int      @default(0)
+  nextReviewDate DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  deck           Deck     @relation(fields: [deckId], references: [id], onDelete: Cascade)
+}
+
+model Quiz {
+  id          String     @id @default(cuid())
+  userId      String
+  title       String
+  score       Float?
+  total       Int
+  createdAt   DateTime   @default(now())
+  
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questions   Question[]
+}
+
+model Question {
+  id            String   @id @default(cuid())
+  quizId        String
+  prompt        String   @db.Text
+  options       String[]
+  correctOption Int
+  userAnswer    Int?
+  explanation   String?  @db.Text
+
+  quiz          Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+}
+
+model StudySession {
+  id          String   @id @default(cuid())
+  userId      String
+  duration    Int      // in minutes
+  type        String   // "pomodoro", "review", "reading"
+  completed   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Conversation {
+  id        String    @id @default(cuid())
+  userId    String
+  title     String
+  createdAt DateTime  @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  Message[]
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  role           String       // "user", "assistant"
+  content        String       @db.Text
+  createdAt      DateTime     @default(now())
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model Goal {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  isDone    Boolean  @default(false)
+  dueDate   DateTime?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Exam {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  subject     String
+  date        DateTime
+  targetScore Float?
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Achievement {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  icon        String
+  xpReward    Int
+
+  users       UserAchievement[]
+}
+
+model UserAchievement {
+  userId        String
+  achievementId String
+  unlockedAt    DateTime @default(now())
+
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@id([userId, achievementId])
+}
+
+model Community {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+
+  members     CommunityMember[]
+}
+
+model CommunityMember {
+  userId      String
+  communityId String
+  role        String   @default("member") // "admin", "member"
+  joinedAt    DateTime @default(now())
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@id([userId, communityId])
+}

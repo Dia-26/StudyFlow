@@ -1,0 +1,53 @@
+[browser] You are trying to animate strokeDashoffset from "283" to "283". "283" is not an animatable value.. For more information and steps for solving, visit https://motion.dev/troubleshooting/value-not-animatable (<anonymous>)
+[browser] You are trying to animate strokeDashoffset from "283" to "283". "283" is not an animatable value.. For more information and steps for solving, visit https://motion.dev/troubleshooting/value-not-animatable (<anonymous>)
+(node:7660) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[browser] You are trying to animate strokeDashoffset from "283" to "283". "283" is not an animatable value.. For more information and steps for solving, visit https://motion.dev/troubleshooting/value-not-animatable (<anonymous>)
+[browser] Uncaught Error: Hydration failed because the server rendered text didn't match the client. As a result this tree will be regenerated on the client. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <HTTPAccessFallbackBoundary notFound={undefined} forbidden={undefined} unauthorized={undefined}>
+      <RedirectBoundary>
+        <RedirectErrorBoundary router={{...}}>
+          <InnerLayoutRouter url="/dashboard" tree={[...]} params={{}} cacheNode={{rsc:{...}, ...}} segmentPath={[...]} ...>
+            <SegmentViewNode type="page" pagePath="dashboard/...">
+              <SegmentTrieNode>
+              <ClientPageRoot Component={function Dashboard} serverProvidedParams={{...}}>
+                <Dashboard params={Promise} searchParams={Promise}>
+                  <div className="max-w-5xl ...">
+                    <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} className="flex flex-...">
+                      <div className="flex flex-..." style={{opacity:0, ...}} ref={function useMotionRef.useCallback}>
+                        <div>
+                        <div className="z-10">
+                          <h1>
+                          <p className="text-muted...">
++                           1
+-                           2
+                            ...
+                        ...
+                    ...
+            ...
+          ...
+
+    at <unknown> (https://react.dev/link/hydration-mismatch)
+    at p (<anonymous>)
+    at Dashboard (src/app/dashboard/page.tsx:193:11)
+  191 |             {userName ? `Welcome back, ${userName}!` : "Welcome back!"}
+  192 |           </h1>
+> 193 |           <p className="text-muted-foreground">
+      |           ^
+  194 |             You have {subjects.length} saved subject{subjects.length === 1 ? "" : "s"} in...
+  195 |           </p>
+  196 |         </div>
+[browser] You are trying to animate strokeDashoffset from "283" to "283". "283" is not an animatable value.. For more information and steps for solving, visit https://motion.dev/troubleshooting/value-not-animatable (<anonymous>)
+[browser] You are trying to animate strokeDashoffset from "283" to "283". "283" is not an animatable value.. For more information and steps for solving, visit https://motion.dev/troubleshooting/value-not-animatable (<anonymous>)
