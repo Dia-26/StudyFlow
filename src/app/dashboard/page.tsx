@@ -47,6 +47,7 @@ export default function Dashboard() {
   const [subjectTime, setSubjectTime] = useState("");
   const [subjectNotes, setSubjectNotes] = useState("");
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
   const [studyPlan, setStudyPlan] = useState<{
     summary: string;
     priorities: string[];
@@ -57,6 +58,7 @@ export default function Dashboard() {
   const { setActiveDocument } = useStudyStore();
 
   useEffect(() => {
+    setIsHydrated(true);
     const syncSubjects = () => setSubjects(readStudySubjects(initialSubjects));
 
     window.addEventListener(ANALYTICS_UPDATED_EVENT, syncSubjects);
@@ -155,21 +157,36 @@ export default function Dashboard() {
       setIsUploading(true);
 
       try {
-        const formData = new FormData();
-        formData.append("file", file);
+        // Parse PDF in the browser to avoid server-side worker issues
+        const pdfjs = await import("pdfjs-dist/legacy/build/pdf");
+        try {
+          // Use local worker served from public folder to avoid CDN fetch issues
+          // @ts-ignore
+          pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+        } catch {}
 
-        const response = await fetch("/api/upload", {
-          method: "POST",
-          body: formData,
-        });
+        const arrayBuffer = await file.arrayBuffer();
+        // disable worker to avoid runtime worker fetch issues in some environments
+        const pdf = await pdfjs.getDocument({ data: arrayBuffer, disableWorker: true }).promise;
 
-        if (!response.ok) throw new Error("Upload failed");
+        let fullText = "";
+        for (let i = 1; i <= pdf.numPages; i++) {
+          try {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items.map((it: any) => (it && it.str) ? it.str : "").join(" ");
+            fullText += pageText + "\n";
+          } catch (e) {
+            console.error("Page parse error", e);
+          }
+        }
 
-        const data = await response.json();
-        setActiveDocument(data.name, data.text);
+        if (!fullText.trim()) throw new Error("No text extracted from PDF");
 
-        alert(`Successfully uploaded "${data.name}"! It is now set as your active global context.`);
-      } catch {
+        setActiveDocument(file.name, fullText.trim());
+        alert(`Successfully uploaded "${file.name}"! It is now set as your active global context.`);
+      } catch (err) {
+        console.error("Client PDF parse error:", err);
         alert("Failed to parse document. Are you sure it's a PDF?");
       } finally {
         setIsUploading(false);
@@ -190,9 +207,13 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold tracking-tight mb-2">
             {userName ? `Welcome back, ${userName}!` : "Welcome back!"}
           </h1>
-          <p className="text-muted-foreground">
-            You have {subjects.length} saved subject{subjects.length === 1 ? "" : "s"} in your study dashboard.
-          </p>
+          {isHydrated ? (
+            <p className="text-muted-foreground">
+              You have {subjects.length} saved subject{subjects.length === 1 ? "" : "s"} in your study dashboard.
+            </p>
+          ) : (
+            <p className="text-muted-foreground">Loading your subjects...</p>
+          )}
         </div>
 
         <input
@@ -364,47 +385,49 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {subjects.map((subject) => (
-            <Card key={subject.id} className="shadow-sm overflow-hidden hover:shadow-md transition-shadow">
-              <CardContent className="p-0">
-                <div className="p-5 border-b border-border">
-                  <div className="flex justify-between items-start gap-4 mb-4">
-                    <div className="min-w-0">
-                      <h3 className="font-semibold text-base break-words">{subject.name}</h3>
-                      <p className="mt-1 text-sm text-muted-foreground break-words">{subject.notes}</p>
+        {isHydrated && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {subjects.map((subject) => (
+              <Card key={subject.id} className="shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+                <CardContent className="p-0">
+                  <div className="p-5 border-b border-border">
+                    <div className="flex justify-between items-start gap-4 mb-4">
+                      <div className="min-w-0">
+                        <h3 className="font-semibold text-base break-words">{subject.name}</h3>
+                        <p className="mt-1 text-sm text-muted-foreground break-words">{subject.notes}</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-xs font-medium px-2 py-1 bg-muted rounded-md text-foreground">{subject.timeSpent}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => deleteSubject(subject.id)}
+                          className="text-muted-foreground hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs font-medium px-2 py-1 bg-muted rounded-md text-foreground">{subject.timeSpent}</span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => deleteSubject(subject.id)}
-                        className="text-muted-foreground hover:text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Course Mastery</span>
+                        <span>{subject.progress}%</span>
+                      </div>
+                      <div className="h-1.5 w-full rounded-full bg-primary/20">
+                        <div className="h-full rounded-full bg-primary" style={{ width: `${subject.progress}%` }} />
+                      </div>
                     </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>Course Mastery</span>
-                      <span>{subject.progress}%</span>
-                    </div>
-                    <div className="h-1.5 w-full rounded-full bg-primary/20">
-                      <div className="h-full rounded-full bg-primary" style={{ width: `${subject.progress}%` }} />
-                    </div>
+                  <div className="bg-muted/30 p-3 px-5 flex justify-between items-center hover:bg-muted/50 cursor-pointer transition-colors group">
+                    <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">Continue Studying</span>
+                    <Play className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
                   </div>
-                </div>
-                <div className="bg-muted/30 p-3 px-5 flex justify-between items-center hover:bg-muted/50 cursor-pointer transition-colors group">
-                  <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">Continue Studying</span>
-                  <Play className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
       </motion.div>
     </div>
   );

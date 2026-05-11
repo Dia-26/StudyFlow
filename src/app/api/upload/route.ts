@@ -1,36 +1,20 @@
 import { NextResponse } from "next/server";
-import pdfParse from "pdf-parse";
 
-function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
-}
+// Server-side PDF parsing is disabled to avoid worker/module bundling issues
+// in Vercel/Serverless/Turbopack environments. Client-side parsing is used
+// instead (see src/app/dashboard/page.tsx). This route remains as a fallback
+// that returns a clear message.
 
 export async function POST(req: Request) {
-  try {
-    const formData = await req.formData();
-    const file = formData.get("file") as File | null;
-    
-    if (!file) {
-      return NextResponse.json({ error: "No file provided" }, { status: 400 });
-    }
+  const formData = await req.formData();
+  const file = formData.get("file");
 
-    if (file.name.endsWith(".pdf") || file.type === "application/pdf") {
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      const data = await pdfParse(buffer);
-      
-      return NextResponse.json({ 
-        text: data.text,
-        name: file.name
-      });
-    } else {
-       return NextResponse.json({ error: "Only PDFs are supported for now." }, { status: 400 });
-    }
-  } catch (error: unknown) {
-    console.error("Upload API Error:", error);
-    return NextResponse.json(
-      { error: getErrorMessage(error, "An error occurred while parsing the document.") },
-      { status: 500 }
-    );
+  if (!file) {
+    return NextResponse.json({ error: "No file provided" }, { status: 400 });
   }
+
+  return NextResponse.json(
+    { error: "Server-side PDF parsing disabled. Parse PDFs client-side instead." },
+    { status: 501 }
+  );
 }
