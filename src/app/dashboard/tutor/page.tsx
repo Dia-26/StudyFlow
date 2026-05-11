@@ -189,24 +189,55 @@ export default function AITutorPage() {
     setInput("");
     setAttachment(null);
 
-    // Call real Gemini API
     try {
-      const formData = new FormData();
-      
-      // If there's an active global document but no local attachment, inject its text into the prompt
       let finalPrompt = userPrompt || "Please analyze this document.";
+      let documentTextForApi = activeDocumentText ?? undefined;
+
+      if (currentAttachment) {
+        if (currentAttachment.type === "application/pdf" || currentAttachment.name.toLowerCase().endsWith(".pdf")) {
+          // @ts-expect-error pdfjs-dist legacy build lacks complete typings in Next.js
+          const pdfjs = await import("pdfjs-dist/legacy/build/pdf");
+          try {
+            pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+          } catch {
+            // fallback below still works with disableWorker
+          }
+
+          const buffer = await currentAttachment.arrayBuffer();
+          const pdf = await pdfjs.getDocument({ data: buffer, disableWorker: true }).promise;
+          let extractedText = "";
+
+          for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+            const page = await pdf.getPage(pageNumber);
+            const content = await page.getTextContent();
+            const pageText = content.items
+              .map((item: any) => (item?.str ? item.str : ""))
+              .join(" ")
+              .replace(/\s+/g, " ")
+              .trim();
+
+            if (pageText) extractedText += `${pageText}\n`;
+          }
+
+          documentTextForApi = extractedText.trim() || documentTextForApi;
+          finalPrompt = `[ATTACHED PDF: ${currentAttachment.name}]\n${finalPrompt}`;
+        } else {
+          finalPrompt = `[ATTACHED FILE: ${currentAttachment.name}]\n${finalPrompt}`;
+        }
+      }
+
+      // If there's an active global document, include its extracted text
       if (!currentAttachment && activeDocumentText) {
         finalPrompt = `[GLOBAL DOCUMENT CONTEXT: ${activeDocumentText.substring(0, 15000)}]\n\nUser Question: ${finalPrompt}`;
-      }
-      
-      formData.append("prompt", finalPrompt);
-      if (currentAttachment) {
-        formData.append("file", currentAttachment);
       }
 
       const response = await fetch("/api/chat", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: finalPrompt,
+          documentText: documentTextForApi,
+        }),
       });
 
       const data = await response.json();
@@ -224,7 +255,7 @@ export default function AITutorPage() {
       setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: `**Error:** ${getErrorMessage(err)}. Make sure you have GROQ_API_KEY in your .env.local file.`
+        content: `**Error:** ${getErrorMessage(err)}. Please try again or check that the AI service is configured.`
       }]);
     }
   };

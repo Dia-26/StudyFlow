@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import Groq from "groq-sdk";
-import { safeJsonParse, ensureArray } from "@/lib/safeJson";
+import { safeJsonParse } from "@/lib/safeJson";
 import { pushAiLog } from "@/lib/aiResponseLog";
 import { normalizeFlashcards } from "@/lib/groqValidation";
 

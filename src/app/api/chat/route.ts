@@ -29,7 +29,25 @@ export async function POST(req: Request) {
     }
 
     const groq = new Groq({ apiKey });
-    const body = await req.json();
+    const contentType = req.headers.get("content-type") || "";
+
+    let body: { prompt?: string; documentText?: string } = {};
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await req.formData();
+      body.prompt = typeof formData.get("prompt") === "string" ? (formData.get("prompt") as string) : undefined;
+      body.documentText = typeof formData.get("documentText") === "string" ? (formData.get("documentText") as string) : undefined;
+    } else {
+      try {
+        body = await req.json();
+      } catch (error) {
+        console.error("Chat API body parse error:", error);
+        return NextResponse.json(
+          { error: "Invalid request body. Send JSON with prompt and documentText, or legacy form-data with prompt/documentText fields." },
+          { status: 400 }
+        );
+      }
+    }
+
     const prompt = body.prompt as string;
     const documentText = body.documentText as string | undefined;
 
