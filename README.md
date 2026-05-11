@@ -174,27 +174,6 @@ StudyFlow uses secure authentication with:
 - Protected routes
 - User data encryption
 
-## 🚀 Deployment
-
-### Deploy to Vercel (Recommended)
-```bash
-npm install -g vercel
-vercel
-```
-
-### Deploy to Other Platforms
-See [Next.js Deployment Documentation](https://nextjs.org/docs/deployment)
-
-## 🤝 Contributing
-
-We welcome contributions! Here's how:
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit changes (`git commit -m 'Add AmazingFeature'`)
-4. Push to branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
 ## 📝 Development Guide
 
 ### Running Tests
@@ -213,46 +192,11 @@ npm run start
 npm run lint
 ```
 
-## 🐛 Known Issues
-
-- Turbopack bundler compatibility on Windows (using webpack as fallback)
-- Large PDF processing may take time
-- Real-time collaboration features in beta
-
-## 🗺️ Roadmap
-
-- [ ] Real-time collaborative studying
-- [ ] Mobile app (React Native)
-- [ ] Advanced AI tutoring
-- [ ] Integration with popular learning platforms
-- [ ] Offline mode support
-- [ ] Voice notes and transcription
-- [ ] Study group matching algorithm
-
-## 📞 Support
-
-For support, issues, or questions:
-- Open an [Issue](https://github.com/Dia-26/StudyFlow/issues)
-- Check existing discussions
-- Review documentation
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
 ## 👨‍💻 Author
 
 **Dia**
 - GitHub: [@Dia-26](https://github.com/Dia-26)
 
-## 🙏 Acknowledgments
-
-- Next.js team for the amazing framework
-- Shadcn/ui for beautiful components
-- MongoDB for reliable database
-- All contributors and users
-
----
 
 ⭐ If you find StudyFlow helpful, please consider giving it a star on GitHub!
 
