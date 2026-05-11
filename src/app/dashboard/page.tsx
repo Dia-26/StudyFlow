@@ -152,45 +152,119 @@ export default function Dashboard() {
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const file = e.target.files[0];
-      setIsUploading(true);
+    if (!e.target.files || e.target.files.length === 0) return;
 
+    const file = e.target.files[0];
+    
+    // Validate file type
+    if (!file.type.includes("pdf")) {
+      alert("Please select a valid PDF file.");
+      return;
+    }
+
+    // Validate file size (max 50MB for client-side processing)
+    const MAX_SIZE = 50 * 1024 * 1024; // 50MB
+    if (file.size > MAX_SIZE) {
+      alert("File size exceeds 50MB. Please select a smaller PDF.");
+      return;
+    }
+
+    setIsUploading(true);
+
+    try {
+      // Step 1: Import pdfjs dynamically
+      // @ts-expect-error - pdfjs-dist doesn't have complete type declarations for legacy build
+      const pdfjs = await import("pdfjs-dist/legacy/build/pdf");
+
+      // Step 2: Configure worker from public folder
       try {
-        // Parse PDF in the browser to avoid server-side worker issues
-        const pdfjs = await import("pdfjs-dist/legacy/build/pdf");
-        try {
-          // Use local worker served from public folder to avoid CDN fetch issues
-          // @ts-ignore
-          pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
-        } catch {}
-
-        const arrayBuffer = await file.arrayBuffer();
-        // disable worker to avoid runtime worker fetch issues in some environments
-        const pdf = await pdfjs.getDocument({ data: arrayBuffer, disableWorker: true }).promise;
-
-        let fullText = "";
-        for (let i = 1; i <= pdf.numPages; i++) {
-          try {
-            const page = await pdf.getPage(i);
-            const textContent = await page.getTextContent();
-            const pageText = textContent.items.map((it: any) => (it && it.str) ? it.str : "").join(" ");
-            fullText += pageText + "\n";
-          } catch (e) {
-            console.error("Page parse error", e);
-          }
-        }
-
-        if (!fullText.trim()) throw new Error("No text extracted from PDF");
-
-        setActiveDocument(file.name, fullText.trim());
-        alert(`Successfully uploaded "${file.name}"! It is now set as your active global context.`);
-      } catch (err) {
-        console.error("Client PDF parse error:", err);
-        alert("Failed to parse document. Are you sure it's a PDF?");
-      } finally {
-        setIsUploading(false);
+        // @ts-ignore - GlobalWorkerOptions is not fully typed
+        pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+      } catch (workerError) {
+        console.warn("Failed to set worker source, will use disableWorker fallback", workerError);
       }
+
+      // Step 3: Read file as ArrayBuffer
+      const arrayBuffer = await file.arrayBuffer();
+      if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+        throw new Error("Failed to read file");
+      }
+
+      // Step 4: Load PDF document
+      const pdf = await pdfjs.getDocument({
+        data: arrayBuffer,
+        disableWorker: true, // Fallback: single-threaded parsing for Vercel compatibility
+      }).promise;
+
+      if (!pdf || pdf.numPages === 0) {
+        throw new Error("Invalid PDF: No pages found");
+      }
+
+      // Step 5: Extract text from all pages
+      let fullText = "";
+      const pageCount = Math.min(pdf.numPages, 1000); // Safety limit
+
+      for (let i = 1; i <= pageCount; i++) {
+        try {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          
+          // Extract text from items and normalize spacing
+          const pageText = textContent.items
+            .map((item: any) => {
+              if (item?.str) return item.str;
+              return "";
+            })
+            .join(" ")
+            .replace(/\s+/g, " ") // Normalize multiple spaces to single space
+            .trim();
+
+          if (pageText) {
+            fullText += pageText + "\n";
+          }
+        } catch (pageError) {
+          console.warn(`Failed to extract text from page ${i}:`, pageError);
+          // Continue with next page instead of failing
+        }
+      }
+
+      // Step 6: Validate extracted text
+      const cleanedText = fullText.trim();
+      if (!cleanedText) {
+        throw new Error("No readable text found in PDF. The file may be scanned or image-based.");
+      }
+
+      // Step 7: Store document in global context (in-memory, not persisted)
+      setActiveDocument(file.name, cleanedText);
+
+      // Step 8: Success feedback
+      alert(
+        `✓ Successfully loaded "${file.name}" (${pdf.numPages} pages, ${cleanedText.length} characters).\n\n` +
+        `This document is now your active context for:\n` +
+        `• AI Tutor conversations\n` +
+        `• Flashcard generation\n` +
+        `• Quiz creation`
+      );
+
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Unknown error";
+      console.error("PDF processing error:", err);
+
+      let userMessage = `Failed to process PDF: ${errorMessage}`;
+      
+      if (errorMessage.includes("Invalid PDF")) {
+        userMessage = "This file appears to be corrupted or not a valid PDF.";
+      } else if (errorMessage.includes("No readable text")) {
+        userMessage = "No text found in PDF. The file may be scanned or image-based. Try OCR scanning first.";
+      }
+
+      alert(userMessage);
+    } finally {
+      setIsUploading(false);
     }
   };
 
