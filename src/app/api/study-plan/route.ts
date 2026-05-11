@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Groq from "groq-sdk";
 import { safeJsonParse } from "@/lib/safeJson";
+import { pushAiLog } from "@/lib/aiResponseLog";
 
 type Subject = {
   name: string;
@@ -93,6 +94,13 @@ export async function POST(req: Request) {
       console.error("StudyPlan - raw AI response:", raw);
 
       const { data: parsed } = safeJsonParse(raw) as { data: any };
+
+      // Log the AI response regardless of validity
+      try {
+        pushAiLog({ route: 'study-plan', raw, parsed: parsed ?? null, error: parsed ? null : 'invalid_json' });
+      } catch (logErr) {
+        console.warn('Failed to push AI log', logErr);
+      }
 
       if (
         parsed &&

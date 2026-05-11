@@ -1,3 +1,4 @@
+import { pushAiLog } from "@/lib/aiResponseLog";
 import { NextResponse } from "next/server";
 import Groq from "groq-sdk";
 
@@ -61,6 +62,12 @@ Question: ${prompt}`;
 
     const raw = chatCompletion.choices?.[0]?.message?.content ?? "";
     console.error("Chat - raw AI response:", raw);
+
+    try {
+      pushAiLog({ route: 'chat', raw, parsed: null, error: null });
+    } catch (logErr) {
+      console.warn('Failed to push AI log', logErr);
+    }
 
     return NextResponse.json({ text: typeof raw === "string" ? raw : String(raw) });
   } catch (error: unknown) {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Groq from "groq-sdk";
 import { safeJsonParse, ensureArray } from "@/lib/safeJson";
+import { pushAiLog } from "@/lib/aiResponseLog";
 
 type Flashcard = {
   front: string;
@@ -56,6 +57,13 @@ export async function POST(req: Request) {
     flashcards = ensureArray<Flashcard>(flashcards)
       .filter((f) => f && typeof f.front === "string" && typeof f.back === "string")
       .slice(0, 10);
+
+    // Log the raw and parsed result for debugging
+    try {
+      pushAiLog({ route: 'flashcards', raw, parsed: data ?? null, error: flashcards.length === 0 ? 'no_valid_flashcards' : null });
+    } catch (logErr) {
+      console.warn('Failed to push AI log', logErr);
+    }
 
     if (flashcards.length === 0) {
       console.error("Flashcards: AI returned no valid flashcards", { raw, parsed: data });

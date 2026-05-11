@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Groq from "groq-sdk";
 import { safeJsonParse } from "@/lib/safeJson";
+import { pushAiLog } from "@/lib/aiResponseLog";
 
 type QuizQuestion = {
   question: string;
@@ -110,6 +111,13 @@ export async function POST(req: Request) {
       const validQuestions = parsedQuestions
         .map((q) => (isValidQuestion(q as Partial<QuizQuestion>) ? (q as QuizQuestion) : null))
         .filter(Boolean) as QuizQuestion[];
+
+      // Log AI response for debugging
+      try {
+        pushAiLog({ route: 'quiz', raw, parsed: data ?? null, error: validQuestions.length === 0 ? 'no_valid_questions' : null });
+      } catch (logErr) {
+        console.warn('Failed to push AI log', logErr);
+      }
 
       if (validQuestions.length > 0) {
         return NextResponse.json({ questions: validQuestions.slice(0, 5), source: "ai" });
