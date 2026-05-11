@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import Groq from "groq-sdk";
+import { safeJsonParse, ensureArray } from "@/lib/safeJson";
 
 type Flashcard = {
   front: string;
@@ -25,20 +26,7 @@ export async function POST(req: Request) {
 
     const groq = new Groq({ apiKey });
 
-    const prompt = `You are an expert study assistant. Generate exactly 10 high-quality flashcards based on the provided document text. 
-This is deck number ${deckNumber}. ${deckNumber > 1 ? "IMPORTANT: Focus on completely different, deeper, or more niche topics than the most obvious main ideas to ensure the student learns new material." : ""}
-Return a JSON object containing a single key "flashcards" which maps to an array of objects.
-Each object must have exactly two keys: "front" (a question or concept) and "back" (the answer or definition).
-
-Document Text:
-${contextText.substring(0, 15000)}
-
-Output Format Example:
-{
-  "flashcards": [
-    { "front": "What is Mitochondria?", "back": "The powerhouse of the cell." }
-  ]
-}`;
+    const prompt = `You are an expert study assistant. STRICTLY RETURN VALID JSON ONLY. Do NOT include any explanatory text, no markdown, no code fences. Generate exactly 10 high-quality flashcards based on the provided document text.\n\nThis is deck number ${deckNumber}. ${deckNumber > 1 ? "IMPORTANT: Focus on completely different, deeper, or more niche topics than the most obvious main ideas to ensure the student learns new material." : ""}\n\nReturn a JSON object with the single key \"flashcards\" mapping to an array of objects. Each object must have exactly two keys: \"front\" and \"back\".\n\nDocument Text:\n${contextText.substring(0, 15000)}\n\nExample response:\n{ "flashcards": [ { "front": "Question?", "back": "Answer." } ] }`;
 
     const completion = await groq.chat.completions.create({
       messages: [{ role: "user", content: prompt }],
@@ -47,30 +35,31 @@ Output Format Example:
       temperature: 0.8,
     });
 
-    // Wait, Groq JSON mode requires the prompt to contain the word "JSON" and response_format type json_object.
-    // Actually, Llama 3 sometimes returns { "flashcards": [...] } if we enforce json_object. Let's just parse the text.
-    
-    let rawContent = completion.choices[0]?.message?.content || "[]";
-    
-    // In case it's wrapped in { "flashcards": [...] } or markdown blocks
-    rawContent = rawContent.replace(/```json/g, "").replace(/```/g, "").trim();
-    
+    const raw = completion.choices[0]?.message?.content || "";
+    console.error("Flashcards - raw AI response:", raw);
+
+    const { data } = safeJsonParse(raw);
+
     let flashcards: Flashcard[] = [];
-    try {
-      const parsed = JSON.parse(rawContent) as unknown;
-      // Handle { "flashcards": [...] } or [...]
-      if (Array.isArray(parsed)) {
-        flashcards = parsed as Flashcard[];
-      } else if (parsed && typeof parsed === "object" && "flashcards" in parsed && Array.isArray(parsed.flashcards)) {
-        flashcards = parsed.flashcards as Flashcard[];
-      } else if (parsed && typeof parsed === "object") {
-        // Find the first array value in the object
-        const arrVal = Object.values(parsed).find(v => Array.isArray(v));
-        if (arrVal) flashcards = arrVal as Flashcard[];
+    if (data) {
+      if (Array.isArray(data)) flashcards = data as Flashcard[];
+      else if (typeof data === "object" && data !== null && "flashcards" in data && Array.isArray((data as any).flashcards)) {
+        flashcards = (data as any).flashcards as Flashcard[];
+      } else if (typeof data === "object" && data !== null) {
+        // pick the first array value
+        const arr = Object.values(data).find((v) => Array.isArray(v)) as any;
+        if (arr) flashcards = arr as Flashcard[];
       }
-    } catch {
-      console.error("Failed to parse JSON:", rawContent);
-      throw new Error("Failed to parse flashcards from AI response.");
+    }
+
+    // Validate structure conservatively
+    flashcards = ensureArray<Flashcard>(flashcards)
+      .filter((f) => f && typeof f.front === "string" && typeof f.back === "string")
+      .slice(0, 10);
+
+    if (flashcards.length === 0) {
+      console.error("Flashcards: AI returned no valid flashcards", { raw, parsed: data });
+      return NextResponse.json({ error: "AI returned malformed flashcards. Try again." }, { status: 502 });
     }
 
     return NextResponse.json({ flashcards });

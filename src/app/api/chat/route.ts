@@ -59,7 +59,10 @@ Question: ${prompt}`;
       model: "llama-3.3-70b-versatile",
     });
 
-    return NextResponse.json({ text: chatCompletion.choices[0]?.message?.content || "" });
+    const raw = chatCompletion.choices?.[0]?.message?.content ?? "";
+    console.error("Chat - raw AI response:", raw);
+
+    return NextResponse.json({ text: typeof raw === "string" ? raw : String(raw) });
   } catch (error: unknown) {
     console.error("Chat API Error:", error);
     return NextResponse.json(

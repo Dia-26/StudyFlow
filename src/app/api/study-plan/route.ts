@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import Groq from "groq-sdk";
+import { safeJsonParse } from "@/lib/safeJson";
 
 type Subject = {
   name: string;
@@ -77,17 +78,9 @@ export async function POST(req: Request) {
 
     try {
       const groq = new Groq({ apiKey });
-      const prompt = `You are StudyFlow's AI study coach. Create a concise personalized study plan from this JSON data.
-Return only JSON with this shape:
-{
-  "summary": "one sentence",
-  "priorities": ["three concrete actions"],
-  "focusPlan": "one short focus-time recommendation",
-  "source": "ai"
-}
-
-Data:
-${JSON.stringify(data).slice(0, 12000)}`;
+      const prompt = `You are StudyFlow's AI study coach. STRICTLY RETURN VALID JSON ONLY. Do NOT include explanations, no markdown, no code fences. Return only JSON adhering to this shape exactly:
+    { "summary": "one sentence", "priorities": ["three concrete actions"], "focusPlan": "one short focus-time recommendation", "source": "ai" }
+    \nData:\n${JSON.stringify(data).slice(0, 12000)}`;
 
       const completion = await groq.chat.completions.create({
         messages: [{ role: "user", content: prompt }],
@@ -96,21 +89,22 @@ ${JSON.stringify(data).slice(0, 12000)}`;
         temperature: 0.5,
       });
 
-      const rawContent = completion.choices[0]?.message?.content || "{}";
-      const parsed = JSON.parse(rawContent) as {
-        summary?: unknown;
-        priorities?: unknown;
-        focusPlan?: unknown;
-      };
+      const raw = completion.choices[0]?.message?.content || "";
+      console.error("StudyPlan - raw AI response:", raw);
+
+      const { data: parsed } = safeJsonParse(raw) as { data: any };
 
       if (
+        parsed &&
         typeof parsed.summary === "string" &&
         Array.isArray(parsed.priorities) &&
-        parsed.priorities.every((item) => typeof item === "string") &&
+        parsed.priorities.every((item: unknown) => typeof item === "string") &&
         typeof parsed.focusPlan === "string"
       ) {
         return NextResponse.json({ ...parsed, source: "ai" });
       }
+
+      console.error("Study plan AI returned invalid JSON", { raw, parsed });
     } catch (error: unknown) {
       console.error("Study plan AI failed, using fallback:", getErrorMessage(error));
     }

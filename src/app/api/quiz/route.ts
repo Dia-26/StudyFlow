@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import Groq from "groq-sdk";
+import { safeJsonParse } from "@/lib/safeJson";
 
 type QuizQuestion = {
   question: string;
@@ -80,29 +81,7 @@ export async function POST(req: Request) {
       });
     }
 
-    const prompt = `You are an expert examiner. Generate a 5-question multiple-choice quiz based on the document text.
-This is quiz set number ${quizNumber}. ${quizNumber > 1 ? "IMPORTANT: Do NOT repeat questions from basic topics. Focus on completely different concepts, deeper details, or advanced applications from the document." : ""}
-Return a JSON object containing a single key "questions" which maps to an array of objects.
-Each object must have these exact keys:
-- "question": string (the question text)
-- "options": string array (exactly 4 options)
-- "answer": string (the exact correct option from the options array)
-- "explanation": string (why this is correct)
-
-Document Text:
-${contextText.substring(0, 15000)}
-
-Output Format Example:
-{
-  "questions": [
-    {
-      "question": "What is the capital of France?",
-      "options": ["London", "Berlin", "Paris", "Rome"],
-      "answer": "Paris",
-      "explanation": "Paris is the capital and most populous city of France."
-    }
-  ]
-}`;
+    const prompt = `You are an expert examiner. STRICTLY RETURN VALID JSON ONLY. Do NOT include any explanatory text, no markdown, no code fences. Generate a 5-question multiple-choice quiz based on the document text.\n\nThis is quiz set number ${quizNumber}. ${quizNumber > 1 ? "IMPORTANT: Do NOT repeat questions from basic topics. Focus on completely different concepts, deeper details, or advanced applications from the document." : ""}\n\nReturn a JSON object with single key \"questions\" mapping to an array of objects. Each object must have keys: \"question\", \"options\" (exactly 4 strings), \"answer\" (one of the options), and \"explanation\".\n\nDocument Text:\n${contextText.substring(0, 15000)}\n\nExample response:\n{ "questions": [ { "question": "Q?", "options": ["A","B","C","D"], "answer": "A", "explanation": "..." } ] }`;
 
     try {
       const groq = new Groq({ apiKey });
@@ -113,24 +92,30 @@ Output Format Example:
         temperature: 0.8,
       });
 
-      let rawContent = completion.choices[0]?.message?.content || "{}";
-      rawContent = rawContent.replace(/```json/g, "").replace(/```/g, "").trim();
+      const raw = completion.choices[0]?.message?.content || "";
+      console.error("Quiz - raw AI response:", raw);
 
-      let questions: QuizQuestion[] = [];
-      const parsed = JSON.parse(rawContent) as unknown;
-      if (parsed && typeof parsed === "object" && "questions" in parsed && Array.isArray(parsed.questions)) {
-        questions = parsed.questions as QuizQuestion[];
-      } else if (parsed && typeof parsed === "object") {
-        const arrVal = Object.values(parsed).find(v => Array.isArray(v));
-        if (arrVal) questions = arrVal as QuizQuestion[];
+      const { data } = safeJsonParse(raw);
+      let parsedQuestions: unknown[] = [];
+      if (data) {
+        if (Array.isArray(data)) parsedQuestions = data as unknown[];
+        else if (typeof data === "object" && data !== null && "questions" in data && Array.isArray((data as any).questions)) {
+          parsedQuestions = (data as any).questions as unknown[];
+        } else if (typeof data === "object" && data !== null) {
+          const arr = Object.values(data).find((v) => Array.isArray(v)) as any;
+          if (arr) parsedQuestions = arr as unknown[];
+        }
       }
 
-      const validQuestions = questions.filter(isValidQuestion).slice(0, 5);
+      const validQuestions = parsedQuestions
+        .map((q) => (isValidQuestion(q as Partial<QuizQuestion>) ? (q as QuizQuestion) : null))
+        .filter(Boolean) as QuizQuestion[];
+
       if (validQuestions.length > 0) {
-        return NextResponse.json({ questions: validQuestions, source: "ai" });
+        return NextResponse.json({ questions: validQuestions.slice(0, 5), source: "ai" });
       }
 
-      console.error("Quiz AI response did not include valid questions:", rawContent);
+      console.error("Quiz AI response did not include valid questions", { raw, parsed: data });
     } catch (error: unknown) {
       console.error("Quiz AI generation failed, using fallback:", getErrorMessage(error, "Unknown error"));
     }
