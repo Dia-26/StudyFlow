@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import Groq from "groq-sdk";
 import { safeJsonParse } from "@/lib/safeJson";
 import { pushAiLog } from "@/lib/aiResponseLog";
+import { normalizeStudyPlan } from "@/lib/groqValidation";
 
 type Subject = {
   name: string;
@@ -102,14 +103,10 @@ export async function POST(req: Request) {
         console.warn('Failed to push AI log', logErr);
       }
 
-      if (
-        parsed &&
-        typeof parsed.summary === "string" &&
-        Array.isArray(parsed.priorities) &&
-        parsed.priorities.every((item: unknown) => typeof item === "string") &&
-        typeof parsed.focusPlan === "string"
-      ) {
-        return NextResponse.json({ ...parsed, source: "ai" });
+      const normalizedPlan = normalizeStudyPlan(parsed);
+
+      if (normalizedPlan) {
+        return NextResponse.json(normalizedPlan);
       }
 
       console.error("Study plan AI returned invalid JSON", { raw, parsed });

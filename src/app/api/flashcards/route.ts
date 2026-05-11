@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import Groq from "groq-sdk";
 import { safeJsonParse, ensureArray } from "@/lib/safeJson";
 import { pushAiLog } from "@/lib/aiResponseLog";
+import { normalizeFlashcards } from "@/lib/groqValidation";
 
 type Flashcard = {
   front: string;
@@ -41,36 +42,21 @@ export async function POST(req: Request) {
 
     const { data } = safeJsonParse(raw);
 
-    let flashcards: Flashcard[] = [];
-    if (data) {
-      if (Array.isArray(data)) flashcards = data as Flashcard[];
-      else if (typeof data === "object" && data !== null && "flashcards" in data && Array.isArray((data as any).flashcards)) {
-        flashcards = (data as any).flashcards as Flashcard[];
-      } else if (typeof data === "object" && data !== null) {
-        // pick the first array value
-        const arr = Object.values(data).find((v) => Array.isArray(v)) as any;
-        if (arr) flashcards = arr as Flashcard[];
-      }
-    }
-
-    // Validate structure conservatively
-    flashcards = ensureArray<Flashcard>(flashcards)
-      .filter((f) => f && typeof f.front === "string" && typeof f.back === "string")
-      .slice(0, 10);
+    const normalizedFlashcards = normalizeFlashcards(data);
 
     // Log the raw and parsed result for debugging
     try {
-      pushAiLog({ route: 'flashcards', raw, parsed: data ?? null, error: flashcards.length === 0 ? 'no_valid_flashcards' : null });
+      pushAiLog({ route: 'flashcards', raw, parsed: data ?? null, error: normalizedFlashcards.length === 0 ? 'no_valid_flashcards' : null });
     } catch (logErr) {
       console.warn('Failed to push AI log', logErr);
     }
 
-    if (flashcards.length === 0) {
+    if (normalizedFlashcards.length === 0) {
       console.error("Flashcards: AI returned no valid flashcards", { raw, parsed: data });
       return NextResponse.json({ error: "AI returned malformed flashcards. Try again." }, { status: 502 });
     }
 
-    return NextResponse.json({ flashcards });
+    return NextResponse.json({ flashcards: normalizedFlashcards });
   } catch (error: unknown) {
     console.error("Flashcards API Error:", error);
     return NextResponse.json({ error: getErrorMessage(error, "An error occurred.") }, { status: 500 });

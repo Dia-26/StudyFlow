@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import Groq from "groq-sdk";
 import { safeJsonParse } from "@/lib/safeJson";
 import { pushAiLog } from "@/lib/aiResponseLog";
+import { normalizeQuizQuestions } from "@/lib/groqValidation";
 
 type QuizQuestion = {
   question: string;
@@ -97,20 +98,7 @@ export async function POST(req: Request) {
       console.error("Quiz - raw AI response:", raw);
 
       const { data } = safeJsonParse(raw);
-      let parsedQuestions: unknown[] = [];
-      if (data) {
-        if (Array.isArray(data)) parsedQuestions = data as unknown[];
-        else if (typeof data === "object" && data !== null && "questions" in data && Array.isArray((data as any).questions)) {
-          parsedQuestions = (data as any).questions as unknown[];
-        } else if (typeof data === "object" && data !== null) {
-          const arr = Object.values(data).find((v) => Array.isArray(v)) as any;
-          if (arr) parsedQuestions = arr as unknown[];
-        }
-      }
-
-      const validQuestions = parsedQuestions
-        .map((q) => (isValidQuestion(q as Partial<QuizQuestion>) ? (q as QuizQuestion) : null))
-        .filter(Boolean) as QuizQuestion[];
+      const validQuestions = normalizeQuizQuestions(data);
 
       // Log AI response for debugging
       try {
